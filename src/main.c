@@ -208,8 +208,10 @@ void handleClient(int clientHandleSocket) {
         return;
     }
 
-    send(clientHandleSocket, "\x05\x00\x00\x01\x04\x03\x02\x01\x06\x05", 10, 0);
+    // Send a server reply: SUCCESS, bound to IPv4 1.2.3.4:5
+    send(clientHandleSocket, "\x05\x00\x00\x01\x01\x02\x03\x04\x00\x05", 10, 0);
 
+    // Connect to the requested server? Nah, here's a hardcoded response instead.
     const char* pedro = "HTTP/1.1 200 OK\nContent-Length: 13\n\nPedro McPedro";
     send(clientHandleSocket, pedro, strlen(pedro), 0);
 
