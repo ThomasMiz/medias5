@@ -91,28 +91,6 @@ int main(int argc, const char* argv[]) {
 
         handleClient(clientHandleSocket);
 
-        /*char readBuffer[READ_BUFFER_SIZE + 1];
-        while (1) {
-            ssize_t bytesReceived = recv(clientHandleSocket, readBuffer, READ_BUFFER_SIZE, 0);
-            if (bytesReceived == 0)
-                break;
-            if (bytesReceived < 0) {
-                perror("[ERR] recv()");
-                break;
-            }
-
-            readBuffer[bytesReceived] = '\0';
-            printf("[INF] Received %li bytes: %s\n", bytesReceived, readBuffer);
-
-            ssize_t bytesSent = send(clientHandleSocket, readBuffer, bytesReceived, 0);
-            if (bytesSent < 0) {
-                perror("[ERR] send()");
-                break;
-            } else if (bytesSent != bytesReceived) {
-                printf("[ERR] send() sent unexpected number of bytes: %lu (expected %lu)", bytesSent, bytesReceived);
-            }
-        }*/
-
         close(clientHandleSocket);
     }
 }
@@ -232,7 +210,7 @@ void handleClient(int clientHandleSocket) {
 
     send(clientHandleSocket, "\x05\x00\x00\x01\x04\x03\x02\x01\x06\x05", 10, 0);
 
-    const char* pedro = "HTTP/1.1 200 OK\nContent-Length: 25\n\nMilanesa con muchas papas";
+    const char* pedro = "HTTP/1.1 200 OK\nContent-Length: 13\n\nPedro McPedro";
     send(clientHandleSocket, pedro, strlen(pedro), 0);
 
     // Wait for the client to close the TCP connection
