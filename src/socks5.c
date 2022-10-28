@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "socks5.h"
+#include "util.h"
 
 #define READ_BUFFER_SIZE 2048
 
@@ -57,12 +58,16 @@ int handleClient(int clientSocket) {
 
     // The client can now start sending requests.
 
-    struct addrinfo addressConnectTo;
+    struct addrinfo* addressConnectTo;
     if (handleRequest(clientSocket, &addressConnectTo))
         return -1;
-    
+
+    // Now we must conenct to the requested server and reply with success/error code.
+
     if (handleConnectAndReply(clientSocket, &addressConnectTo))
         return -1;
+
+    // The connection has been established! Now the client and requested server can talk to each other.
 
     if (handleConnectionData(clientSocket))
         return -1;
@@ -120,7 +125,7 @@ int handleAuthNegotiation(int clientSocket) {
     return 0;
 }
 
-int handleRequest(int clientSocket, struct addrinfo* addressConnectTo) {
+int handleRequest(int clientSocket, struct addrinfo** connectAddresses) {
     ssize_t received;
     char receiveBuffer[READ_BUFFER_SIZE + 1];
 
@@ -136,48 +141,114 @@ int handleRequest(int clientSocket, struct addrinfo* addressConnectTo) {
         return -1;
     }
 
-    // Check ATYP and print the address/domainname the client asked to connect to
+    char sockaddrBuffer[sizeof(struct sockaddr_in6)] = {0};
+    struct addrinfo addrHints;
+    memset(&addrHints, 0, sizeof(addrHints));
+    addrHints.ai_socktype = SOCK_STREAM;
+    addrHints.ai_protocol = IPPROTO_TCP;
+
+    // These variables are used in case a hostname is specified instead of an address.
+    const char* hostname = NULL;
+    int port = 0;
+
+    // Check ATYP and print the address/hostname the client asked to connect to
     if (receiveBuffer[3] == 1) {
         // IPv4
-        printf("[INF] Client asked to connect to IPv4: ");
         received = recvFull(clientSocket, receiveBuffer, 6, 0);
         if (received < 0)
             return -1;
-        struct sockaddr_in s;
-        memset(&s, 0, sizeof(s));
-        s.sin_addr.s_addr = *((int*)&receiveBuffer[0]);
-        printf("%s\n", inet_ntoa(s.sin_addr));
+
+        struct sockaddr_in* addr = (struct sockaddr_in*)sockaddrBuffer;
+        addr->sin_family = AF_INET;
+        addr->sin_addr.s_addr = *((int*)&receiveBuffer[0]);
+        addr->sin_port = *((int*)&receiveBuffer[4]);
+        port = ntohs(addr->sin_port);
+
+        addrHints.ai_family = AF_INET;
+        addrHints.ai_addr = (struct sockaddr*)addr;
+        addrHints.ai_addrlen = sizeof(struct sockaddr_in);
     } else if (receiveBuffer[3] == 3) {
         // Domain name
-        printf("[INF] Client asked to connect to domain name: ");
-        received = recv(clientSocket, receiveBuffer, 1, 0);
-        if (received < 1) {
-            printf("[ERR] Client closed connection unexpectedly\n");
-            return -1;
-        }
-
-        int domainNameLength = receiveBuffer[0];
-        received = recvFull(clientSocket, receiveBuffer, domainNameLength + 2, 0);
+        received = recvFull(clientSocket, receiveBuffer, 1, 0);
         if (received < 0)
             return -1;
 
-        int port = ntohs(*((short*)&receiveBuffer[domainNameLength]));
-        receiveBuffer[domainNameLength] = '\0';
-        printf("%s:%d\n", receiveBuffer, port);
+        int hostnameLength = receiveBuffer[0];
+        received = recvFull(clientSocket, receiveBuffer, hostnameLength + 2, 0);
+        if (received < 0)
+            return -1;
+
+        port = ntohs(*((short*)&receiveBuffer[hostnameLength]));
+        receiveBuffer[hostnameLength] = '\0';
+        hostname = receiveBuffer;
+
+        addrHints.ai_family = AF_UNSPEC;
+
     } else if (receiveBuffer[3] == 4) {
-        printf("[INF] Client asked to connect to IPv6: paja implementar el print xd");
+        received = recvFull(clientSocket, receiveBuffer, 18, 0);
+        if (received < 0)
+            return -1;
+
+        struct sockaddr_in6* addr = (struct sockaddr_in6*)sockaddrBuffer;
+        addr->sin6_family = AF_INET6;
+        memcpy(&addr->sin6_addr, receiveBuffer, 16);
+        addr->sin6_port = *((short*)&receiveBuffer[16]);
+        port = ntohs(addr->sin6_port);
+
+        addrHints.ai_family = AF_INET6;
+        addrHints.ai_addr = (struct sockaddr*)addr;
+        addrHints.ai_addrlen = sizeof(struct sockaddr_in6);
     } else {
         // The reply specified REP as X'08' "Address type not supported", ATYP as IPv4 and BND as 0.0.0.0:0.
         sendFull(clientSocket, "\x05\x08\x00\x01\x00\x00\x00\x00\x00\x00", 10, 0);
         return -1;
     }
 
+    if (hostname == NULL) {
+        char printBuf[128];
+        printSocketAddress(addrHints.ai_addr, printBuf);
+        printf("[INF] Client asked to connect to %s: %s\n", printFamily(&addrHints), printBuf);
+    } else {
+        printf("[INF] Client asked to connect to domain: %s:%d\n", hostname, port);
+    }
+
+    char service[6] = {0};
+    sprintf(service, "%d", port);
+
+    int getAddrStatus = getaddrinfo(hostname, service, &addrHints, connectAddresses);
+    if (getAddrStatus != 0) {
+        printf("[ERR] getaddrinfo() failed: %s\n", gai_strerror(getAddrStatus));
+
+        // The reply specifies ATYP as IPv4 and BND as 0.0.0.0:0.
+        char errorMessage[10] = "\x05 \x00\x01\x00\x00\x00\x00\x00\x00";
+        // We calculate the REP value based on the type of error returned by getaddrinfo
+        errorMessage[1] =
+            getAddrStatus == EAI_FAMILY   ? '\x08' // REP is "Address type not supported"
+            : getAddrStatus == EAI_NONAME ? '\x04' // REP is "Host Unreachable"
+                                          : '\x01'; // REP is "General SOCKS server failure"
+        sendFull(clientSocket, errorMessage, 10, 0);
+        return -1;
+    }
+
+    char addr[64];
+    for (struct addrinfo* aip = *connectAddresses; aip != NULL; aip = aip->ai_next) {
+        printFlags(aip);
+        printf(" family: %s ", printFamily(aip));
+        printf(" type: %s ", printType(aip));
+        printf(" protocol %s ", printProtocol(aip));
+        printf("\n\thost %s", aip->ai_canonname ? aip->ai_canonname : "-");
+        printf("address: %s", printAddressPort(aip, addr));
+        putchar('\n');
+    }
+
+    freeaddrinfo(*connectAddresses);
+
     return 0;
 }
 
-int handleConnectAndReply(int clientSocket, struct addrinfo* addressConnectTo) {
-    ssize_t received;
-    char receiveBuffer[READ_BUFFER_SIZE + 1];
+int handleConnectAndReply(int clientSocket, struct addrinfo** addressConnectTo) {
+    // ssize_t received;
+    // char receiveBuffer[READ_BUFFER_SIZE + 1];
 
     // TODO: Actually conenct somewhere 💀
 
@@ -186,7 +257,6 @@ int handleConnectAndReply(int clientSocket, struct addrinfo* addressConnectTo) {
         return -1;
 
     return 0;
-
 }
 
 int handleConnectionData(int clientSocket) {
@@ -204,7 +274,7 @@ int handleConnectionData(int clientSocket) {
     printf("[INF] Waiting for client to close the connection.\n");
     do {
         received = recv(clientSocket, receiveBuffer, READ_BUFFER_SIZE, 0);
-    } while (received  > 0);
+    } while (received > 0);
 
     return 0;
 }

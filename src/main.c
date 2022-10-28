@@ -1,15 +1,15 @@
 // This is a personal academic project. Dear PVS-Studio, please check it.
 // PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
-#include "util.h"
 #include "socks5.h"
+#include "util.h"
 
 #define MAX_PENDING_CONNECTION_REQUESTS 5
 #define SOURCE_PORT 1080
