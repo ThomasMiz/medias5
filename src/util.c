@@ -7,9 +7,9 @@
 const char* printFamily(struct addrinfo* aip) {
     switch (aip->ai_family) {
         case AF_INET:
-            return "inet";
+            return "IPv4";
         case AF_INET6:
-            return "inet6";
+            return "IPv6";
         case AF_UNIX:
             return "unix";
         case AF_UNSPEC:
@@ -31,7 +31,7 @@ const char* printType(struct addrinfo* aip) {
             return "raw";
     }
 
-    return "unknown ";
+    return "unknown";
 }
 
 const char* printProtocol(struct addrinfo* aip) {
@@ -46,7 +46,7 @@ const char* printProtocol(struct addrinfo* aip) {
             return "raw";
     }
 
-    return "unknown ";
+    return "unknown";
 }
 
 void printFlags(struct addrinfo* aip) {
