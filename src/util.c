@@ -97,9 +97,7 @@ char* printAddressPort(const struct addrinfo* aip, char addr[]) {
 }
 
 int printSocketAddress(const struct sockaddr* address, char* addrBuffer) {
-
     void* numericAddress;
-
     in_port_t port;
 
     switch (address->sa_family) {
