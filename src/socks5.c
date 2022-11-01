@@ -268,7 +268,7 @@ int handleConnectAndReply(int clientSocket, struct addrinfo** connectAddresses, 
 
     // Print all the addrinfo options, just for debugging.
     for (struct addrinfo* aip = *connectAddresses; aip != NULL; aip = aip->ai_next) {
-        printf("[INF] Option %i: %s (%s %s) %s %s (Flags: ", aipIndex, printFamily(aip), printType(aip), printProtocol(aip), aip->ai_canonname ? aip->ai_canonname : "-", printAddressPort(aip, addrBuf));
+        printf("[INF] Option %i: %s (%s %s) %s %s (Flags: ", aipIndex++, printFamily(aip), printType(aip), printProtocol(aip), aip->ai_canonname ? aip->ai_canonname : "-", printAddressPort(aip, addrBuf));
         printFlags(aip);
         printf(")\n");
     }
