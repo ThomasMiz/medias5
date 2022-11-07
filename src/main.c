@@ -19,18 +19,20 @@ int main(int argc, const char* argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
-    int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    // Create the socket. We'll use IPv6 only, IPv6 has backwards compatibility with IPv4
+    // so by using IPv6, we can also handle incoming IPv4 connections ;)
+    int serverSocket = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (serverSocket < 0) {
         perror("[ERR] socket()");
         exit(1);
     }
 
-    struct sockaddr_in srcSocket;
+    // We want to bind our socket on IPv6 listening on all available IP addresses on port SOURCE_PORT.
+    struct sockaddr_in6 srcSocket;
     memset((char*)&srcSocket, 0, sizeof(srcSocket));
-
-    srcSocket.sin_family = AF_INET;
-    srcSocket.sin_port = htons(SOURCE_PORT);
-    srcSocket.sin_addr.s_addr = INADDR_ANY;
+    srcSocket.sin6_family = AF_INET6;
+    srcSocket.sin6_port = htons(SOURCE_PORT);
+    memcpy(&srcSocket.sin6_addr, &in6addr_any, sizeof(in6addr_any));
 
     if (bind(serverSocket, (struct sockaddr*)&srcSocket, sizeof(srcSocket)) != 0) {
         perror("[ERR] bind()");
@@ -42,6 +44,7 @@ int main(int argc, const char* argv[]) {
         exit(1);
     }
 
+    // Get the local address at which our socket was found, for nothing more than printing it out.
     struct sockaddr_storage boundAddress;
     socklen_t boundAddressLen = sizeof(boundAddress);
     if (getsockname(serverSocket, (struct sockaddr*)&boundAddress, &boundAddressLen) >= 0) {
@@ -51,6 +54,7 @@ int main(int argc, const char* argv[]) {
     } else
         perror("[WRN] Failed to getsockname()");
 
+    // Handle incomming connections
     while (1) {
         printf("Listening for next client...\n");
 
