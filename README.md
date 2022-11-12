@@ -6,4 +6,4 @@ This project implements a very simple, barebones socks5 proxy server, for educat
 
 This, of course, means this implementation is very simple and limited. For example, it can only handle a single client at a time.
 
-The server opens a passive socket on 0.0.0.0:1080, and can handle requests for IPv4, IPv6, and domain names (You can only connect to the proxy via IPv4, not IPv6, but can make requests for any).
+The server opens a passive socket on :::1080 and can handle incoming IPv4 and IPv6 connections. Once connected, it can handle proxy requests for IPv4, IPv6, and domain names.
